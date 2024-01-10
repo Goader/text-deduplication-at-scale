@@ -1,20 +1,22 @@
 package ua.nlp.ukrlm
 package readers
 
-import org.apache.spark.sql.SparkSession
+import models.Document
+
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SparkSession
 
 object CC100Reader {
-  def apply(spark: SparkSession, path: String): RDD[Map[String, String]] = {
+  def apply(spark: SparkSession, path: String): RDD[Document] = {
     val lines = spark.sparkContext.textFile(path)
 
     val rdd = lines
       .filter(_.nonEmpty)
       .zipWithIndex
       .map { case (line, idx) =>
-        val id = idx.toString
+        val id = idx
         val text = line
-        Map("id" -> id, "text" -> text)
+        Document(id, text)
       }
 
     rdd

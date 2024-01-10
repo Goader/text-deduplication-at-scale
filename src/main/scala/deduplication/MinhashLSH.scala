@@ -1,18 +1,18 @@
 package ua.nlp.ukrlm
 package deduplication
 
+import models.{Document, DocumentHashBand, HashBand}
+
 import org.apache.spark.rdd.RDD
 
 import scala.util.Random
 
 
 object MinhashLSH {
-  val MaxHash = 4294967295L
-  val MersennePrime = 2305843009213693951L
+  private val MaxHash = 4294967295L
+  private val MersennePrime = 2305843009213693951L
 
   def apply(
-    contentCol: String,
-    idCol: String,
     numPerm: Int,
     ngramSize: Int,
     bandsCount: Int,
@@ -37,8 +37,6 @@ object MinhashLSH {
     })
 
     new MinhashLSH(
-      contentCol,
-      idCol,
       permutations,
       ngramSize,
       hashRanges,
@@ -48,13 +46,11 @@ object MinhashLSH {
 }
 
 class MinhashLSH(
-  contentCol: String,
-  idCol: String,
   permutations: Seq[(Long, Long)],
   ngramSize: Int,
   hashRanges: Seq[(Int, Int)],
   minNgramSize: Int
-) extends java.io.Serializable {
+) extends Serializable {
 
   private def sha1_hash32(payload: String): Int = {
     val md = java.security.MessageDigest.getInstance("SHA-1")
@@ -63,10 +59,14 @@ class MinhashLSH(
     hash
   }
 
+  private def tokenize(content: String): Seq[String] = {
+    content.split("[^\\p{IsAlphabetic}0-9]+")
+  }
+
   private def produceHashBands(
     content: String
   ): Seq[Array[Byte]] = {
-    val tokens = content.split("\\W+")
+    val tokens = tokenize(content)
 
     val minHashes = if (tokens.length < minNgramSize) {
       // MAX_HASH is used as a placeholder for empty content (permutations.length times)
@@ -98,24 +98,16 @@ class MinhashLSH(
     bands
   }
 
-  // receives RDD of dictionaries with keys: idCol, contentCol
-  // returns RDD of dictionaries with keys: "bandIdx", "band", idCol
   def run(
-    rdd: RDD[Map[String, String]],
-  ): RDD[Map[String, Any]] = {
-    val rddWithBands = rdd.flatMap(row => {
-      val content = row(contentCol)
-      val id = row(idCol)
-      val bands = produceHashBands(content)
+    rdd: RDD[Document],
+  ): RDD[DocumentHashBand] = {
+    val rddWithBands = rdd.flatMap(document => {
+      val bands = produceHashBands(document.text)
       val bandsWithIdx = bands.zipWithIndex
       val bandsWithIdxWithId = bandsWithIdx.map(bandWithIdx => {
         val band = bandWithIdx._1
         val idx = bandWithIdx._2
-        Map(
-          "bandIdx" -> idx,
-          "band" -> band,
-          idCol -> id,
-        )
+        DocumentHashBand(idx, HashBand(band), document.id)
       })
       bandsWithIdxWithId
     })
