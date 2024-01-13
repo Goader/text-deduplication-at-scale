@@ -70,20 +70,18 @@ object ConnectedComponents extends Serializable {
     println("iteration: " + iteration)
     if (iteration >= maxIterations || converged) {
       println("converged: " + converged)
-      println("edges: " + edges.count())
+//      println("edges: " + edges.count())
       (edges, converged, iteration)
     } else {
       val largeStarEdges = largeStar(edges).distinct().cache()
       val smallStarEdges = smallStar(largeStarEdges).distinct().cache()
 
-      println("largeStarEdges: " + largeStarEdges.count())
-      println("smallStarEdges: " + smallStarEdges.count())
+//      println("largeStarEdges: " + largeStarEdges.count())
+//      println("smallStarEdges: " + smallStarEdges.count())
 
-      // TODO: should we really also add `b-a`, not just `a-b`?
       val largeStarChanges = largeStarEdges.subtract(edges)
       val smallStarChanges = smallStarEdges.subtract(largeStarEdges)
 
-      // TODO: do we need both of these? what does mean the other check in the connected components repo?
       val newConverged = largeStarChanges.isEmpty() && smallStarChanges.isEmpty()
 
       alternatingAlgorithm(smallStarEdges, maxIterations, iteration + 1, newConverged)

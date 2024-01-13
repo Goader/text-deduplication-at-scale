@@ -3,16 +3,22 @@ package ua.nlp.ukrlm
 import readers.CC100Reader
 import deduplication.{ConnectedComponents, MinhashLSH}
 
+import org.apache.spark.storage.StorageLevel
+
+
 object Main {
   def main(args: Array[String]): Unit = {
     val spark = org.apache.spark.sql.SparkSession.builder
       .master("local[*]")
       .appName("text-deduplication")
+//      .config("spark.driver.memory", "8g")
+//      .config("spark.executor.memory", "8g")
+//      .config("spark.local.dir", "/media/goader/masters/spark")
       .getOrCreate
 
     spark.sparkContext.setLogLevel("WARN")
 
-    val cc100 = CC100Reader(spark, "/media/goader/masters/corpora/cc-100/uk-10m.txt")
+    val cc100 = CC100Reader(spark, args(0))
     cc100.take(10).foreach(println)
 
     val minhashLSH = MinhashLSH(
@@ -24,7 +30,10 @@ object Main {
       seed = 0
     )
 
-    val cc100Bands = minhashLSH.run(cc100)
+    val cc100Bands = minhashLSH
+      .run(cc100)
+//      .persist(StorageLevel.DISK_ONLY)
+
     cc100Bands.take(30).foreach(docBand => {
       println("docId: " + docBand.docId + ", bandIdx: " + docBand.bandIdx)
       println(docBand.band.bytes.mkString("Array(", ", ", ")") + "\n")
@@ -38,7 +47,7 @@ object Main {
         ConnectedComponents.generateEdges(docIds)
       }
       .distinct()
-      .cache()
+      .persist(StorageLevel.MEMORY_AND_DISK_SER)
 
     edges.take(10).foreach(edge => {
       println("edge: " + edge)
@@ -70,8 +79,21 @@ object Main {
         println()
       })
 
-    connectedComponents.collect()
-
-    // TODO: persist
+    // save to file document ids grouped by connected component
+    connectedComponents
+      .map(x => {
+        if (x._1 < x._2) {
+          (x._1, x._2)
+        } else {
+          (x._2, x._1)
+        }
+      })
+      .groupByKey()
+      .map(x => {
+        val componentId = x._1
+        val docIds = x._2.mkString(" ")
+        componentId + " " + docIds
+      })
+      .saveAsTextFile(args(1))
   }
 }

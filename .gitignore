@@ -10,3 +10,5 @@ project
 target
 
 notebooks/.ipynb_checkpoints/
+
+*.inprogress
